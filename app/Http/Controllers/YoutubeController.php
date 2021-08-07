@@ -21,8 +21,6 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Support\Facades\Http;
-use GrowthEngineering\YoutubeTestServer\models\InlineResponse200;
-use GrowthEngineering\YoutubeTestServer\models\PageInfo;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Routing\ResponseFactory;
 use Illuminate\Http\Response;
@@ -45,10 +43,11 @@ class YoutubeController extends Controller
      * @param string $playlistId Id of playlist (required)
      *
      * @return Application|ResponseFactory|Response response
+     * @throws \Illuminate\Validation\ValidationException
      */
     public function getPlaylist($playlistId)
     {
-        $input = Request::all();
+        $lastVideoId = \request("last_video_id");
 
         //path params validation
         if (strlen($playlistId) > 36) {
@@ -63,14 +62,20 @@ class YoutubeController extends Controller
             throw new \InvalidArgumentException('invalid value for $playlistId when calling YoutubeController.getPlaylist, must conform to the pattern /^[a-zA-Z0-9]+$/.');
         }
 
+        $query = [
+            "part" => "snippet,contentDetails,status",
+            "maxResults" => 20,
+            "playlistId" => $playlistId,
+            "key" => env("YOUTUBE_API_KEY")
+        ];
+
+        if($lastVideoId) {
+            $query["pageToken"] = $lastVideoId;
+        }
+
         $res = Http::get(
             "https://www.googleapis.com/youtube/v3/playlistItems",
-            [
-                "part" => "snippet,contentDetails,status",
-                "maxResults" => 20,
-                "playlistId" => "UUTI5S0PqpgB0DbYgcgRU6QQ",
-                "key" => env("YOUTUBE_API_KEY")
-            ]
+            $query
         );
 
         return Response($res->json());
