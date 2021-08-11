@@ -25,6 +25,7 @@ use GrowthEngineering\YoutubeTestServer\models\PlaylistResponse;
 use GrowthEngineering\YoutubeTestServer\models\VideoInfo;
 use GrowthEngineering\YoutubeTestServer\models\VideoThumbnail;
 use GrowthEngineering\YoutubeTestServer\models\VideoThumbnails;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Routing\ResponseFactory;
@@ -71,7 +72,7 @@ class YoutubeController extends Controller
             "part" => "snippet,contentDetails,status",
             "maxResults" => 30,
             "playlistId" => $playlistId,
-            "key" => env("YOUTUBE_API_KEY")
+            "key" => Config::get('youtube.apiKey')
         ];
 
         if($lastVideoId) {
@@ -92,6 +93,7 @@ class YoutubeController extends Controller
         $videos = [];
 
         $playlistObj = $res->object();
+
         $videoIds = [];
 
         foreach($playlistObj->items as $playlistItem) {
@@ -102,7 +104,7 @@ class YoutubeController extends Controller
             "part" => "snippet,contentDetails,statistics",
             "maxResults" => 30,
             "id" => implode(',', $videoIds),
-            "key" => env("YOUTUBE_API_KEY")
+            "key" => Config::get('youtube.apiKey')
         ];
 
         $videosResponse = Http::get(
