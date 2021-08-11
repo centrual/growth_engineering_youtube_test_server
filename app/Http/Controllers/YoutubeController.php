@@ -83,8 +83,6 @@ class YoutubeController extends Controller
             $query
         );
 
-        Log::debug($res);
-
         if($res->serverError() || $res->status() == 404) {
             return Response($res->json(), $res->status());
         }
@@ -94,7 +92,6 @@ class YoutubeController extends Controller
         $videos = [];
 
         $playlistObj = $res->object();
-        Log::debug($playlistObj);
         $videoIds = [];
 
         foreach($playlistObj->items as $playlistItem) {
