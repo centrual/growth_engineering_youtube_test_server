@@ -118,7 +118,9 @@ class YoutubeController extends Controller
 
         $videosObj = $videosResponse->object();
 
-        $playlistInfo->setNextPageToken($playlistObj->nextPageToken);
+        if(isset($playlistObj->nextPageToken)) {
+            $playlistInfo->setNextPageToken($playlistObj->nextPageToken);
+        }
         $response->setPlaylistInfo($playlistInfo);
 
         foreach ($videosObj->items as $videoItem) {
