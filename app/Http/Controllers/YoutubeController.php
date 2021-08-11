@@ -29,6 +29,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Routing\ResponseFactory;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Log;
 
 class YoutubeController extends Controller
 {
@@ -82,8 +83,10 @@ class YoutubeController extends Controller
             $query
         );
 
-        if($res->serverError()) {
-            return Response($res->json());
+        Log::debug($res);
+
+        if($res->serverError() || $res->status() == 404) {
+            return Response($res->json(), $res->status());
         }
 
         $response = new PlaylistResponse();
@@ -91,12 +94,7 @@ class YoutubeController extends Controller
         $videos = [];
 
         $playlistObj = $res->object();
-
-        function getVideoIds($item): string
-        {
-            return $item->contentDetails->videoId;
-        }
-
+        Log::debug($playlistObj);
         $videoIds = [];
 
         foreach($playlistObj->items as $playlistItem) {
@@ -115,8 +113,8 @@ class YoutubeController extends Controller
             $videosQuery
         );
 
-        if($videosResponse->serverError()) {
-            return Response($res->json());
+        if($videosResponse->serverError() || $videosResponse->status() == 404) {
+            return Response($res->json(), $videosResponse->status());
         }
 
         $videosObj = $videosResponse->object();
