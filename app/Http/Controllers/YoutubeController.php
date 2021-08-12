@@ -20,13 +20,17 @@
 
 namespace App\Http\Controllers;
 
+use GrowthEngineering\YoutubeTestServer\models\PlaylistInfo;
+use GrowthEngineering\YoutubeTestServer\models\PlaylistResponse;
+use GrowthEngineering\YoutubeTestServer\models\VideoInfo;
+use GrowthEngineering\YoutubeTestServer\models\VideoThumbnail;
+use GrowthEngineering\YoutubeTestServer\models\VideoThumbnails;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
-use GrowthEngineering\YoutubeTestServer\models\InlineResponse200;
-use GrowthEngineering\YoutubeTestServer\models\PageInfo;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Routing\ResponseFactory;
 use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Request;
+use Illuminate\Support\Facades\Log;
 
 class YoutubeController extends Controller
 {
@@ -45,10 +49,11 @@ class YoutubeController extends Controller
      * @param string $playlistId Id of playlist (required)
      *
      * @return Application|ResponseFactory|Response response
+     * @throws \Illuminate\Validation\ValidationException
      */
     public function getPlaylist($playlistId)
     {
-        $input = Request::all();
+        $lastVideoId = \request("last_video_id");
 
         //path params validation
         if (strlen($playlistId) > 36) {
@@ -63,16 +68,132 @@ class YoutubeController extends Controller
             throw new \InvalidArgumentException('invalid value for $playlistId when calling YoutubeController.getPlaylist, must conform to the pattern /^[a-zA-Z0-9]+$/.');
         }
 
+        $query = [
+            "part" => "snippet,contentDetails,status",
+            "maxResults" => 30,
+            "playlistId" => $playlistId,
+            "key" => Config::get('youtube.apiKey')
+        ];
+
+        if($lastVideoId) {
+            $query["pageToken"] = $lastVideoId;
+        }
+
         $res = Http::get(
             "https://www.googleapis.com/youtube/v3/playlistItems",
-            [
-                "part" => "snippet,contentDetails,status",
-                "maxResults" => 20,
-                "playlistId" => "UUTI5S0PqpgB0DbYgcgRU6QQ",
-                "key" => env("YOUTUBE_API_KEY")
-            ]
+            $query
         );
 
-        return Response($res->json());
+        if($res->serverError() || $res->status() == 404) {
+            return Response($res->json(), $res->status());
+        }
+
+        $response = new PlaylistResponse();
+        $playlistInfo = new PlaylistInfo();
+        $videos = [];
+
+        $playlistObj = $res->object();
+
+        $videoIds = [];
+
+        foreach($playlistObj->items as $playlistItem) {
+            $videoIds[] = $playlistItem->contentDetails->videoId;
+        }
+
+        $videosQuery = [
+            "part" => "snippet,contentDetails,statistics",
+            "maxResults" => 30,
+            "id" => implode(',', $videoIds),
+            "key" => Config::get('youtube.apiKey')
+        ];
+
+        $videosResponse = Http::get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            $videosQuery
+        );
+
+        if($videosResponse->serverError() || $videosResponse->status() == 404) {
+            return Response($res->json(), $videosResponse->status());
+        }
+
+        $videosObj = $videosResponse->object();
+
+        if(isset($playlistObj->nextPageToken)) {
+            $playlistInfo->setNextPageToken($playlistObj->nextPageToken);
+        }
+        $response->setPlaylistInfo($playlistInfo);
+
+        foreach ($videosObj->items as $videoItem) {
+            $video = new VideoInfo();
+
+            $video->setChannelId($videoItem->snippet->channelId);
+            $video->setDescription($videoItem->snippet->description);
+            $video->setTitle($videoItem->snippet->title);
+            $video->setPublishedAt($videoItem->snippet->publishedAt);
+            $video->setVideoId($videoItem->id);
+            $video->setLikeCount($videoItem->statistics->likeCount);
+            $video->setDislikeCount($videoItem->statistics->dislikeCount);
+            $video->setViewCount($videoItem->statistics->viewCount);
+
+            $thumbnails = new VideoThumbnails();
+
+            if(isset($videoItem->snippet->thumbnails->default)) {
+                $targetThumb = $videoItem->snippet->thumbnails->default;
+                $thumbnail = new VideoThumbnail();
+
+                $thumbnail->setUrl($targetThumb->url);
+                $thumbnail->setWidth($targetThumb->width);
+                $thumbnail->setHeight($targetThumb->height);
+                $thumbnails->setDefault($thumbnail);
+            }
+
+            if(isset($videoItem->snippet->thumbnails->medium)) {
+                $targetThumb = $videoItem->snippet->thumbnails->medium;
+                $thumbnail = new VideoThumbnail();
+
+                $thumbnail->setUrl($targetThumb->url);
+                $thumbnail->setWidth($targetThumb->width);
+                $thumbnail->setHeight($targetThumb->height);
+                $thumbnails->setMedium($thumbnail);
+            }
+
+            if(isset($videoItem->snippet->thumbnails->high)) {
+                $targetThumb = $videoItem->snippet->thumbnails->high;
+                $thumbnail = new VideoThumbnail();
+
+                $thumbnail->setUrl($targetThumb->url);
+                $thumbnail->setWidth($targetThumb->width);
+                $thumbnail->setHeight($targetThumb->height);
+                $thumbnails->setHigh($thumbnail);
+            }
+
+            if(isset($videoItem->snippet->thumbnails->standard)) {
+                $targetThumb = $videoItem->snippet->thumbnails->standard;
+                $thumbnail = new VideoThumbnail();
+
+                $thumbnail->setUrl($targetThumb->url);
+                $thumbnail->setWidth($targetThumb->width);
+                $thumbnail->setHeight($targetThumb->height);
+                $thumbnails->setStandard($thumbnail);
+            }
+
+            if(isset($videoItem->snippet->thumbnails->maxres)) {
+                $targetThumb = $videoItem->snippet->thumbnails->maxres;
+                $thumbnail = new VideoThumbnail();
+
+                $thumbnail->setUrl($targetThumb->url);
+                $thumbnail->setWidth($targetThumb->width);
+                $thumbnail->setHeight($targetThumb->height);
+                $thumbnails->setMaxres($thumbnail);
+            }
+
+            $video->setThumbnails($thumbnails);
+
+            $videos[] = $video;
+        }
+
+        $response->setVideoInfo($videos);
+
+        return Response(json_encode($response));
     }
 }
